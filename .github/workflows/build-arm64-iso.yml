@@ -50,8 +50,8 @@ jobs:
         # Install Podman for containerized build (lighter than Docker on macOS)
         brew install podman
         
-        # Initialize podman machine
-        podman machine init --cpus 4 --memory 8192
+        # Initialize podman machine with reduced memory to fit GitHub runner limits
+        podman machine init --cpus 2 --memory 6144 --disk-size 120
         podman machine start
         
     - name: Build ISO using Podman
@@ -69,8 +69,9 @@ jobs:
           -w /workspace \
           -e FEDORA_VERSION="${FEDORA_VERSION}" \
           -e ISO_NAME="${ISO_NAME}" \
-          --tmpfs /tmp:size=4g \
-          --shm-size=1g \
+          --tmpfs /tmp:size=2g \
+          --shm-size=512m \
+          --memory=5g \
           registry.fedoraproject.org/fedora:latest \
           bash -c '
             echo "🔧 Setting up build environment..."
@@ -87,6 +88,9 @@ jobs:
             dnf install -y livecd-tools pykickstart git squashfs-tools \
                            dosfstools syslinux-nonlinux genisoimage \
                            isomd5sum createrepo_c xorriso
+            
+            # Clean package cache to save space
+            dnf clean all
             
             # Set git config (required by some build tools)
             git config --global user.email "build@athenaos.org"
