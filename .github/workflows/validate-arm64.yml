@@ -1,0 +1,60 @@
+name: Quick ARM64 ISO Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths: 
+      - 'athena-iso.ks'
+      - '.github/workflows/**'
+
+jobs:
+  quick-build:
+    name: Quick ARM64 Build Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate Kickstart File
+      run: |
+        # Install pykickstart for validation
+        sudo apt-get update
+        sudo apt-get install -y python3-pip
+        pip3 install pykickstart
+        
+        # Validate the kickstart file syntax
+        echo "🔍 Validating kickstart file..."
+        ksvalidator athena-iso.ks
+        
+        echo "✅ Kickstart file validation passed!"
+        
+    - name: Check ARM64 Specific Configurations
+      run: |
+        echo "🔍 Checking ARM64-specific configurations in kickstart file..."
+        
+        # Check for ARM64 bootloader
+        if grep -q "grub2-efi-aa64" athena-iso.ks; then
+          echo "✅ ARM64 GRUB packages found"
+        else
+          echo "❌ ARM64 GRUB packages missing"
+          exit 1
+        fi
+        
+        # Check for EFI partition
+        if grep -q "/boot/efi" athena-iso.ks; then
+          echo "✅ EFI partition configuration found"
+        else
+          echo "❌ EFI partition configuration missing"
+          exit 1
+        fi
+        
+        # Check that x86-specific packages are removed
+        if grep -q "syslinux\|virtualbox-guest-additions" athena-iso.ks; then
+          echo "❌ x86-specific packages still present"
+          exit 1
+        else
+          echo "✅ x86-specific packages properly removed"
+        fi
+        
+        echo "🎉 All ARM64 checks passed!"

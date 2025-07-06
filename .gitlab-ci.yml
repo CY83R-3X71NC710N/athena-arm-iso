@@ -1,0 +1,19 @@
+stages:
+  - build-iso
+
+build-iso:
+  image: fedora:latest
+  stage: build-iso
+  when: manual
+  before_script:
+    - dnf install -y lorax pykickstart git anaconda sshpass rsync
+    - git config --global user.email "littleowl@athenaos.org"
+    - git config --global user.name "Little Owl"
+    - git remote set-url origin "https://gitlab-ci-token:${CI_PUSH_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git"
+  script:
+    #- git clone https://pagure.io/fedora-kickstarts.git
+    #- cp athena-iso.ks fedora-kickstarts/athena-iso.ks
+    #- cd fedora-kickstarts
+    #- ksflatten -c athena-iso.ks -o athena-flatten.ks
+    - livemedia-creator --make-iso --ks athena-iso.ks --no-virt --iso-only --iso-name athenaos-live-x86_64.iso --resultdir ./results --releasever 42
+    - sshpass -p "${MIRROR_SECRET}" rsync -avzzlr --delete -e "ssh -p 1027 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" results/athenaos-live-x86_64.iso ${MIRROR_USER}@hub.athenaos.org:/srv/mirrors/athena-images/rolling/

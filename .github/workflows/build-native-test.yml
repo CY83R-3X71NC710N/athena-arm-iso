@@ -1,0 +1,100 @@
+name: Build ARM64 ISO (Native macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      fedora_version:
+        description: 'Fedora release version'
+        required: true
+        default: '42'
+  push:
+    branches: [ main, master ]
+    paths: 
+      - 'athena-iso.ks'
+
+env:
+  FEDORA_VERSION: ${{ github.event.inputs.fedora_version || '42' }}
+  ISO_NAME: athenaos-live-aarch64.iso
+
+jobs:
+  build-native:
+    name: Native ARM64 ISO Build
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: System Information
+      run: |
+        echo "🖥️ System Information:"
+        echo "Architecture: $(uname -m)"
+        echo "macOS Version: $(sw_vers -productVersion)"
+        echo "Available CPU cores: $(sysctl -n hw.ncpu)"
+        echo "Available memory: $(sysctl -n hw.memsize | awk '{print $1/1024/1024/1024 " GB"}')"
+        
+    - name: Install Build Tools via Homebrew
+      run: |
+        echo "📦 Installing build dependencies..."
+        
+        # Update Homebrew
+        brew update
+        
+        # Install essential tools
+        brew install wget curl git python3
+        
+        # Install Python kickstart tools
+        pip3 install pykickstart
+        
+    - name: Validate Kickstart File
+      run: |
+        echo "🔍 Validating kickstart file..."
+        ksvalidator athena-iso.ks || {
+          echo "❌ Kickstart validation failed"
+          exit 1
+        }
+        echo "✅ Kickstart file is valid"
+        
+    - name: Try Alternative Build Method
+      run: |
+        echo "🧪 Testing alternative build approaches..."
+        
+        # Since we can't easily install lorax/livemedia-creator on macOS,
+        # let's try using a different approach or document the requirements
+        
+        echo "ℹ️ Native macOS build would require:"
+        echo "  - Fedora build tools (lorax, anaconda)"
+        echo "  - These are not available via Homebrew"
+        echo "  - Container approach is recommended"
+        
+        # For now, just validate our configuration
+        echo "✅ Kickstart validation passed"
+        echo "✅ ARM64 architecture confirmed: $(uname -m)"
+        
+        # Create a mock result for testing
+        mkdir -p ./results
+        echo "Mock ARM64 ISO build completed on $(date)" > ./results/build_info.txt
+        
+    - name: Upload Build Info
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-info-native
+        path: results/build_info.txt
+        retention-days: 7
+        
+    - name: Build Summary
+      run: |
+        echo "## 🍎 Native macOS ARM64 Build Test" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### System Info" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architecture**: $(uname -m)" >> $GITHUB_STEP_SUMMARY
+        echo "- **macOS Version**: $(sw_vers -productVersion)" >> $GITHUB_STEP_SUMMARY
+        echo "- **CPU Cores**: $(sysctl -n hw.ncpu)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Results" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Kickstart file validation passed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Native ARM64 environment confirmed" >> $GITHUB_STEP_SUMMARY
+        echo "- ℹ️ Full ISO build requires containerized approach" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Recommendation" >> $GITHUB_STEP_SUMMARY
+        echo "Use the main build workflow with Podman for full ISO creation."
