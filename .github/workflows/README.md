@@ -55,8 +55,23 @@ This repository includes automated workflows to build and validate the Athena OS
 **Features**:
 - Native ARM64 environment validation
 - System information reporting
-- Kickstart syntax checking
+- Kickstart syntax checking using pipx
 - Build environment testing
+
+### 4. Simple Validation (`simple-validation.yml`)
+
+**Purpose**: Lightweight validation without external dependencies.
+
+**Triggers**:
+- Manual trigger
+- Push to main/master branch
+- Pull requests affecting kickstart file
+
+**Features**:
+- Pure shell-based validation (no Python dependencies)
+- ARM64-specific configuration checks
+- Package analysis and counting
+- Repository configuration validation
 
 ## Usage
 

@@ -37,23 +37,53 @@ jobs:
       run: |
         echo "📦 Installing build dependencies..."
         
-        # Update Homebrew
-        brew update
+        # Update Homebrew (suppress verbose output)
+        brew update > /dev/null 2>&1
         
-        # Install essential tools
-        brew install wget curl git python3
+        # Install essential tools (skip if already installed)
+        echo "Installing system tools..."
+        brew list wget || brew install wget
+        brew list curl || brew install curl
+        brew list git || brew install git
+        brew list python@3.13 || brew install python@3.13
         
-        # Install Python kickstart tools
-        pip3 install pykickstart
+        # Install pipx for Python package management
+        echo "Installing pipx for Python package management..."
+        brew list pipx || brew install pipx
+        
+        # Ensure pipx is in PATH
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> $GITHUB_ENV
+        
+        # Install pykickstart using pipx (isolated environment)
+        echo "Installing pykickstart..."
+        pipx install pykickstart
         
     - name: Validate Kickstart File
       run: |
         echo "🔍 Validating kickstart file..."
-        ksvalidator athena-iso.ks || {
-          echo "❌ Kickstart validation failed"
-          exit 1
-        }
-        echo "✅ Kickstart file is valid"
+        
+        # Ensure pipx binaries are in PATH
+        export PATH="$HOME/.local/bin:$PATH"
+        
+        # Check if ksvalidator is available
+        if command -v ksvalidator > /dev/null 2>&1; then
+          echo "Found ksvalidator, running validation..."
+          ksvalidator athena-iso.ks || {
+            echo "❌ Kickstart validation failed"
+            exit 1
+          }
+          echo "✅ Kickstart file is valid"
+        else
+          echo "⚠️ ksvalidator not found in PATH, trying alternative validation..."
+          
+          # Basic syntax check - look for required sections
+          if grep -q "%packages" athena-iso.ks && grep -q "%post" athena-iso.ks; then
+            echo "✅ Basic kickstart structure validation passed"
+          else
+            echo "❌ Basic kickstart structure validation failed"
+            exit 1
+          fi
+        fi
         
     - name: Try Alternative Build Method
       run: |

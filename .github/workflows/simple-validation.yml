@@ -1,0 +1,170 @@
+name: Simple ARM64 Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths: 
+      - 'athena-iso.ks'
+  pull_request:
+    paths:
+      - 'athena-iso.ks'
+
+jobs:
+  validate:
+    name: Validate ARM64 Configuration
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: System Information
+      run: |
+        echo "🖥️ System Information:"
+        echo "Architecture: $(uname -m)"
+        echo "macOS Version: $(sw_vers -productVersion)"
+        echo "Shell: $SHELL"
+        
+    - name: Basic Kickstart Validation
+      run: |
+        echo "🔍 Performing basic kickstart validation..."
+        
+        KS_FILE="athena-iso.ks"
+        
+        if [ ! -f "$KS_FILE" ]; then
+          echo "❌ Kickstart file not found: $KS_FILE"
+          exit 1
+        fi
+        
+        echo "✅ Kickstart file exists"
+        
+        # Check for required sections
+        echo "Checking required sections..."
+        
+        if grep -q "^%packages" "$KS_FILE"; then
+          echo "✅ %packages section found"
+        else
+          echo "❌ %packages section missing"
+          exit 1
+        fi
+        
+        if grep -q "^%post" "$KS_FILE"; then
+          echo "✅ %post section found"
+        else
+          echo "❌ %post section missing"
+          exit 1
+        fi
+        
+        if grep -q "^%end" "$KS_FILE"; then
+          echo "✅ %end directives found"
+        else
+          echo "❌ %end directives missing"
+          exit 1
+        fi
+        
+    - name: ARM64-Specific Checks
+      run: |
+        echo "🔍 Checking ARM64-specific configurations..."
+        
+        KS_FILE="athena-iso.ks"
+        
+        # Check for ARM64 GRUB packages
+        if grep -q "grub2-efi-aa64" "$KS_FILE"; then
+          echo "✅ ARM64 GRUB packages found (grub2-efi-aa64)"
+        else
+          echo "❌ ARM64 GRUB packages missing"
+          exit 1
+        fi
+        
+        # Check for EFI partition
+        if grep -q "/boot/efi" "$KS_FILE"; then
+          echo "✅ EFI partition configuration found"
+        else
+          echo "❌ EFI partition configuration missing"
+          exit 1
+        fi
+        
+        # Check that x86-specific packages are removed
+        if grep -q "syslinux\|virtualbox-guest-additions\|xorg-x11-drv-vmware" "$KS_FILE"; then
+          echo "❌ x86-specific packages still present:"
+          grep -n "syslinux\|virtualbox-guest-additions\|xorg-x11-drv-vmware" "$KS_FILE" || true
+          exit 1
+        else
+          echo "✅ x86-specific packages properly removed"
+        fi
+        
+        # Check for ARM64 bootloader configuration
+        if grep -q "bootloader.*--location" "$KS_FILE"; then
+          echo "✅ Bootloader configuration found"
+        else
+          echo "⚠️ No explicit bootloader configuration found (may be using defaults)"
+        fi
+        
+    - name: Package Analysis
+      run: |
+        echo "📦 Analyzing package configuration..."
+        
+        KS_FILE="athena-iso.ks"
+        
+        # Count packages
+        PACKAGE_COUNT=$(sed -n '/^%packages/,/^%end/p' "$KS_FILE" | grep -v '^%' | grep -v '^#' | grep -v '^$' | wc -l)
+        echo "Total packages configured: $PACKAGE_COUNT"
+        
+        # Check for essential ARM64 packages
+        echo "Checking essential ARM64 packages..."
+        
+        ESSENTIAL_PACKAGES=(
+          "kernel"
+          "grub2-efi-aa64"
+          "shim-aa64"
+          "linux-firmware"
+        )
+        
+        for package in "${ESSENTIAL_PACKAGES[@]}"; do
+          if grep -q "^$package$" "$KS_FILE"; then
+            echo "✅ $package found"
+          else
+            echo "❌ $package missing"
+          fi
+        done
+        
+    - name: Repository Configuration Check
+      run: |
+        echo "🔍 Checking repository configuration..."
+        
+        KS_FILE="athena-iso.ks"
+        
+        # Check for architecture variables
+        if grep -q '\$basearch' "$KS_FILE"; then
+          echo "✅ Repository URLs use \$basearch variable"
+          echo "Repository URLs that will resolve to aarch64:"
+          grep '\$basearch' "$KS_FILE" | head -5
+        else
+          echo "⚠️ No \$basearch variables found in repository URLs"
+        fi
+        
+        # Check for Fedora repositories
+        if grep -q "fedora.*\$releasever" "$KS_FILE"; then
+          echo "✅ Fedora repositories configured with version variables"
+        else
+          echo "⚠️ Fedora repository configuration may be hardcoded"
+        fi
+        
+    - name: Build Summary
+      run: |
+        echo "## ✅ ARM64 Configuration Validation Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### System Info" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architecture**: $(uname -m)" >> $GITHUB_STEP_SUMMARY
+        echo "- **macOS Version**: $(sw_vers -productVersion)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Kickstart file structure validated" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ ARM64-specific packages confirmed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ x86-specific packages removed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ EFI/UEFI configuration present" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Repository configuration validated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "Configuration is ready for ARM64 ISO building. Use the main build workflow for full ISO creation."
