@@ -64,10 +64,13 @@ jobs:
         # Run the build in a Fedora container using Podman (native ARM64)
         podman run --rm \
           --arch arm64 \
+          --privileged \
           -v "$(pwd):/workspace:Z" \
           -w /workspace \
           -e FEDORA_VERSION="${FEDORA_VERSION}" \
           -e ISO_NAME="${ISO_NAME}" \
+          --tmpfs /tmp:size=4g \
+          --shm-size=1g \
           registry.fedoraproject.org/fedora:latest \
           bash -c '
             echo "🔧 Setting up build environment..."
@@ -75,27 +78,81 @@ jobs:
             # Verify architecture inside container
             echo "Architecture: $(uname -m)"
             
-            # Install required packages
+            # Check available space
+            df -h
+            
+            # Install required packages for live ISO creation
+            echo "📦 Installing build dependencies..."
             dnf update -y
-            dnf install -y lorax pykickstart git anaconda livecd-tools
+            dnf install -y livecd-tools pykickstart git squashfs-tools \
+                           dosfstools syslinux-nonlinux genisoimage \
+                           isomd5sum createrepo_c xorriso
             
             # Set git config (required by some build tools)
             git config --global user.email "build@athenaos.org"
             git config --global user.name "Athena OS Build"
             
-            echo "🚀 Building ISO with livemedia-creator..."
+            # Create cache and temp directories
+            mkdir -p /tmp/livecd-cache /tmp/livecd-tmp
             
-            # Build the ISO using livemedia-creator
-            livemedia-creator \
-              --make-iso \
-              --ks athena-iso.ks \
-              --no-virt \
-              --iso-only \
-              --iso-name "${ISO_NAME}" \
-              --resultdir ./results \
-              --releasever "${FEDORA_VERSION}" \
-              --arch aarch64 \
-              --verbose
+            echo "🚀 Building ISO with livecd-creator..."
+            echo "Using kickstart file: athena-iso.ks"
+            echo "Target ISO name: ${ISO_NAME}"
+            
+            # Create the live ISO using livecd-creator
+            livecd-creator \
+              --config=athena-iso.ks \
+              --fslabel="AthenOS-ARM64-Live" \
+              --title="Athena OS ARM64 Live" \
+              --product="Athena OS" \
+              --releasever="${FEDORA_VERSION}" \
+              --cache=/tmp/livecd-cache \
+              --tmpdir=/tmp/livecd-tmp \
+              --logfile=/tmp/livecd-build.log \
+              --verbose || {
+                echo "❌ livecd-creator failed! Checking logs..."
+                if [ -f /tmp/livecd-build.log ]; then
+                  echo "=== Build log ===" 
+                  tail -50 /tmp/livecd-build.log
+                fi
+                echo "=== Available space ==="
+                df -h
+                echo "=== Files in current directory ==="
+                ls -la
+                exit 1
+              }
+            
+            echo "✅ livecd-creator completed successfully"
+            echo "Checking for created ISO files..."
+            ls -la *.iso 2>/dev/null || echo "No ISO files in current directory"
+            
+            # The ISO is created with a default name, rename it to our desired name
+            if [ -f "AthenOS-ARM64-Live.iso" ]; then
+              mv "AthenOS-ARM64-Live.iso" "./results/${ISO_NAME}"
+              echo "✅ ISO renamed to ${ISO_NAME}"
+            else
+              echo "🔍 Looking for any ISO files created..."
+              find . -name "*.iso" -type f
+              # Try to move any ISO found to results
+              if [ -n "$(find . -maxdepth 1 -name "*.iso" -type f)" ]; then
+                mv *.iso "./results/${ISO_NAME}"
+                echo "✅ Found and renamed ISO to ${ISO_NAME}"
+              else
+                echo "❌ No ISO file found!"
+                echo "Build log contents:"
+                if [ -f /tmp/livecd-build.log ]; then
+                  cat /tmp/livecd-build.log
+                fi
+                exit 1
+              fi
+            fi
+            
+            # Verify the ISO file
+            if [ -f "./results/${ISO_NAME}" ]; then
+              echo "✅ Final ISO verification:"
+              ls -lh "./results/${ISO_NAME}"
+              file "./results/${ISO_NAME}"
+            fi
           '
           
     - name: Cleanup Podman
@@ -107,6 +164,12 @@ jobs:
           
     - name: Verify ISO was created
       run: |
+        echo "🔍 Checking for created ISO..."
+        echo "Contents of current directory:"
+        ls -la
+        echo "Contents of results directory:"
+        ls -la ./results/ || echo "Results directory not found"
+        
         if [ -f "./results/${ISO_NAME}" ]; then
           echo "✅ ISO created successfully: ${ISO_NAME}"
           ls -lh "./results/${ISO_NAME}"
@@ -124,9 +187,11 @@ jobs:
           sha512sum "${ISO_NAME}" > "${ISO_NAME}.sha512"
           cd ..
         else
-          echo "❌ ISO build failed - file not found"
+          echo "❌ ISO build failed - file not found at expected location"
+          echo "Searching for any ISO files in the workspace..."
+          find . -name "*.iso" -type f 2>/dev/null || echo "No ISO files found anywhere"
           echo "Contents of results directory:"
-          ls -la ./results/
+          ls -la ./results/ || echo "Results directory doesn't exist"
           exit 1
         fi
         
