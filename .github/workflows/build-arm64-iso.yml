@@ -23,34 +23,16 @@ env:
 jobs:
   build-iso:
     name: Build Athena OS ARM64 ISO
-    runs-on: macos-latest  # Native ARM64 runner
+    runs-on: ubuntu-latest  # Use Ubuntu runner for Docker support
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Verify ARM64 Architecture
-        run: |
-          echo "🔍 Verifying we're running on ARM64..."
-          uname -m
-          if [[ "$(uname -m)" != "arm64" ]]; then
-            echo "❌ Not running on ARM64 architecture"
-            exit 1
-          fi
-          echo "✅ Confirmed: Running on native ARM64"
-      
       - name: Install Dependencies
         run: |
           echo "📦 Installing build dependencies..."
-          brew update
-          brew install wget curl
-          which docker || (echo "Docker not found, installing..." && brew install --cask docker)
-          # Check if Docker is running
-          if ! docker info > /dev/null 2>&1; then
-            echo "❌ Docker is not running or not available on this runner."
-            echo "This workflow requires Docker to be running. On GitHub-hosted macOS runners, Docker is not supported."
-            exit 1
-          fi
-          echo "✅ Docker is ready"
+          sudo apt-get update
+          sudo apt-get install -y wget curl qemu-user-static
           docker --version
       
       - name: Build ISO using Docker
@@ -227,3 +209,4 @@ jobs:
             results/${{ env.ISO_NAME }}.sha256
             results/${{ env.ISO_NAME }}.sha512
           draft: false
+         
