@@ -37,7 +37,6 @@ jobs:
       
       - name: Build ISO using Docker
         run: |
-          mkdir -p ./results
           echo "🏗️ Starting ARM64 ISO build..."
           docker run --rm \
             --platform linux/arm64 \
@@ -57,11 +56,15 @@ jobs:
               echo "📦 Installing build dependencies..."
               dnf update -y
               dnf install -y lorax livemedia-creator pykickstart git squashfs-tools \
-                             dosfstools genisoimage isomd5sum createrepo_c xorriso
+                             dosfstools genisoimage isomd5sum createrepo_c xorriso \
+                             anaconda hfsplus-tools
               dnf clean all
               git config --global user.email "build@athenaos.org"
               git config --global user.name "Athena OS Build"
               mkdir -p /tmp/livecd-cache /tmp/livecd-tmp
+              # Remove results directory if it exists (livemedia-creator requires it to not exist)
+              rm -rf ./results
+              mkdir -p ./results
               echo "🚀 Building ISO with livemedia-creator..."
               echo "Using kickstart file: athena-iso.ks"
               echo "Target ISO name: ${ISO_NAME}"
