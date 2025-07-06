@@ -56,30 +56,30 @@ jobs:
               df -h
               echo "📦 Installing build dependencies..."
               dnf update -y
-              dnf install -y livecd-tools pykickstart git squashfs-tools \
-                             dosfstools syslinux-nonlinux genisoimage \
-                             isomd5sum createrepo_c xorriso
+              dnf install -y lorax livemedia-creator pykickstart git squashfs-tools \
+                             dosfstools genisoimage isomd5sum createrepo_c xorriso
               dnf clean all
               git config --global user.email "build@athenaos.org"
               git config --global user.name "Athena OS Build"
               mkdir -p /tmp/livecd-cache /tmp/livecd-tmp
-              echo "🚀 Building ISO with livecd-creator..."
+              echo "🚀 Building ISO with livemedia-creator..."
               echo "Using kickstart file: athena-iso.ks"
               echo "Target ISO name: ${ISO_NAME}"
-              livecd-creator \
-                --config=athena-iso.ks \
-                --fslabel="AthenOS-ARM64-Live" \
-                --title="Athena OS ARM64 Live" \
-                --product="Athena OS" \
-                --releasever="${FEDORA_VERSION}" \
-                --cache=/tmp/livecd-cache \
-                --tmpdir=/tmp/livecd-tmp \
-                --logfile=/tmp/livecd-build.log \
+              livemedia-creator \
+                --make-iso \
+                --ks athena-iso.ks \
+                --no-virt \
+                --iso-only \
+                --iso-name "${ISO_NAME}" \
+                --resultdir ./results \
+                --releasever "${FEDORA_VERSION}" \
+                --arch aarch64 \
+                --logfile /tmp/lmc-build.log \
                 --verbose || {
-                  echo "❌ livecd-creator failed! Checking logs..."
-                  if [ -f /tmp/livecd-build.log ]; then
+                  echo "❌ livemedia-creator failed! Checking logs..."
+                  if [ -f /tmp/lmc-build.log ]; then
                     echo "=== Build log ==="
-                    tail -50 /tmp/livecd-build.log
+                    tail -50 /tmp/lmc-build.log
                   fi
                   echo "=== Available space ==="
                   df -h
@@ -87,25 +87,17 @@ jobs:
                   ls -la
                   exit 1
                 }
-              echo "✅ livecd-creator completed successfully"
+              echo "✅ livemedia-creator completed successfully"
               echo "Checking for created ISO files..."
-              ls -la *.iso 2>/dev/null || echo "No ISO files in current directory"
-              if [ -f "AthenOS-ARM64-Live.iso" ]; then
-                mv "AthenOS-ARM64-Live.iso" "./results/${ISO_NAME}"
-                echo "✅ ISO renamed to ${ISO_NAME}"
+              ls -la ./results/*.iso 2>/dev/null || echo "No ISO files in results directory"
+              if [ -f "./results/${ISO_NAME}" ]; then
+                echo "✅ ISO created: ./results/${ISO_NAME}"
               else
-                echo "🔍 Looking for any ISO files created..."
-                find . -name "*.iso" -type f
-                if [ -n "$(find . -maxdepth 1 -name "*.iso" -type f)" ]; then
-                  mv *.iso "./results/${ISO_NAME}"
-                  echo "✅ Found and renamed ISO to ${ISO_NAME}"
-                else
-                  echo "❌ No ISO file found!"
-                  if [ -f /tmp/livecd-build.log ]; then
-                    cat /tmp/livecd-build.log
-                  fi
-                  exit 1
+                echo "❌ No ISO file found!"
+                if [ -f /tmp/lmc-build.log ]; then
+                  cat /tmp/lmc-build.log
                 fi
+                exit 1
               fi
               if [ -f "./results/${ISO_NAME}" ]; then
                 echo "✅ Final ISO verification:"
@@ -209,4 +201,3 @@ jobs:
             results/${{ env.ISO_NAME }}.sha256
             results/${{ env.ISO_NAME }}.sha512
           draft: false
-         
