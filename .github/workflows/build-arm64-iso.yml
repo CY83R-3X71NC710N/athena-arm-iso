@@ -74,8 +74,7 @@ jobs:
                 --resultdir ./results \
                 --releasever "${FEDORA_VERSION}" \
                 --arch aarch64 \
-                --logfile /tmp/lmc-build.log \
-                --verbose || {
+                --logfile /tmp/lmc-build.log || {
                   echo "❌ livemedia-creator failed! Checking logs..."
                   if [ -f /tmp/lmc-build.log ]; then
                     echo "=== Build log ==="
