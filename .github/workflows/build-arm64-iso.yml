@@ -1,9 +1,25 @@
 name: Build and Release Athena OS ARM64 ISO
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_tag:
+  workflow_dispatc    - name: Build ISO using Docker
+      run: |
+        # Create a directory for build results
+        mkdir -p ./results
+        
+        echo "🏗️ Starting ARM64 ISO build..."
+        
+        # Run the build in a Fedora container using Docker (native ARM64)
+        docker run --rm \
+          --platform linux/arm64 \
+          --privileged \
+          -v "$(pwd):/workspace" \
+          -w /workspace \
+          -e FEDORA_VERSION="${FEDORA_VERSION}" \
+          -e ISO_NAME="${ISO_NAME}" \
+          --tmpfs /tmp:size=2g \
+          --shm-size=512m \
+          --memory=5g \
+          registry.fedoraproject.org/fedora:latest \   release_tag:
         description: 'Release tag (e.g., v1.0.0-arm64)'
         required: true
         default: 'v1.0.0-arm64'
@@ -47,14 +63,25 @@ jobs:
         brew update
         brew install wget curl
         
-        # Install Podman for containerized build (lighter than Docker on macOS)
-        brew install podman
+        # Docker Desktop for Mac comes pre-installed on GitHub runners
+        # Just verify it's available and start it
+        which docker || (echo "Docker not found, installing..." && brew install --cask docker)
         
-        # Initialize podman machine with reduced memory to fit GitHub runner limits
-        podman machine init --cpus 2 --memory 6144 --disk-size 120
-        podman machine start
+        # Start Docker if not running
+        if ! docker info > /dev/null 2>&1; then
+          echo "Starting Docker Desktop..."
+          open -a Docker
+          # Wait for Docker to start
+          while ! docker info > /dev/null 2>&1; do
+            echo "Waiting for Docker to start..."
+            sleep 5
+          done
+        fi
         
-    - name: Build ISO using Podman
+        echo "✅ Docker is ready"
+        docker --version
+        
+    - name: Build ISO using Docker
       run: |
         # Create a directory for build results
         mkdir -p ./results
@@ -65,7 +92,7 @@ jobs:
         podman run --rm \
           --arch arm64 \
           --privileged \
-          -v "$(pwd):/workspace:Z" \
+          -v "$(pwd):/workspace" \
           -w /workspace \
           -e FEDORA_VERSION="${FEDORA_VERSION}" \
           -e ISO_NAME="${ISO_NAME}" \
@@ -159,12 +186,11 @@ jobs:
             fi
           '
           
-    - name: Cleanup Podman
+    - name: Cleanup Docker
       if: always()
       run: |
-        echo "🧹 Cleaning up Podman resources..."
-        podman machine stop || true
-        podman machine rm -f || true
+        echo "🧹 Cleaning up Docker resources..."
+        docker system prune -f || true
           
     - name: Verify ISO was created
       run: |
@@ -276,7 +302,7 @@ jobs:
         echo "- **Size**: ${{ env.ISO_SIZE }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Architecture**: ARM64 (aarch64) - Native Build" >> $GITHUB_STEP_SUMMARY
         echo "- **Fedora Version**: ${{ env.FEDORA_VERSION }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Build Method**: Native ARM64 on macOS runner" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Method**: Native ARM64 with Docker on macOS runner" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Checksums" >> $GITHUB_STEP_SUMMARY
         echo "- **SHA256**: \`${{ env.ISO_SHA256 }}\`" >> $GITHUB_STEP_SUMMARY
