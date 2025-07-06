@@ -44,13 +44,11 @@ jobs:
           brew update
           brew install wget curl
           which docker || (echo "Docker not found, installing..." && brew install --cask docker)
+          # Check if Docker is running
           if ! docker info > /dev/null 2>&1; then
-            echo "Starting Docker Desktop..."
-            open -a Docker
-            while ! docker info > /dev/null 2>&1; do
-              echo "Waiting for Docker to start..."
-              sleep 5
-            done
+            echo "❌ Docker is not running or not available on this runner."
+            echo "This workflow requires Docker to be running. On GitHub-hosted macOS runners, Docker is not supported."
+            exit 1
           fi
           echo "✅ Docker is ready"
           docker --version
@@ -229,4 +227,3 @@ jobs:
             results/${{ env.ISO_NAME }}.sha256
             results/${{ env.ISO_NAME }}.sha512
           draft: false
-         
